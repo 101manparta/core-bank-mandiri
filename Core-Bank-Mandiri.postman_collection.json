@@ -1,0 +1,591 @@
+{
+  "info": {
+    "name": "Core Bank Mandiri - API Collection",
+    "description": "Complete API collection for testing Core Bank Mandiri microservices",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url_payment",
+      "value": "http://localhost:8083",
+      "type": "string"
+    },
+    {
+      "key": "base_url_fraud",
+      "value": "http://localhost:8085",
+      "type": "string"
+    },
+    {
+      "key": "base_url_notification",
+      "value": "http://localhost:8086",
+      "type": "string"
+    },
+    {
+      "key": "base_url_auth",
+      "value": "http://localhost:8081",
+      "type": "string"
+    },
+    {
+      "key": "base_url_account",
+      "value": "http://localhost:8082",
+      "type": "string"
+    },
+    {
+      "key": "access_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "user_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "account_id",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "0. Health Checks",
+      "item": [
+        {
+          "name": "Payment Service Health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url_payment}}/health",
+              "host": ["{{base_url_payment}}"],
+              "path": ["health"]
+            }
+          }
+        },
+        {
+          "name": "Fraud Detection Health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url_fraud}}/health",
+              "host": ["{{base_url_fraud}}"],
+              "path": ["health"]
+            }
+          }
+        },
+        {
+          "name": "Notification Service Health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url_notification}}/health",
+              "host": ["{{base_url_notification}}"],
+              "path": ["health"]
+            }
+          }
+        },
+        {
+          "name": "Auth Service Health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url_auth}}/actuator/health",
+              "host": ["{{base_url_auth}}"],
+              "path": ["actuator", "health"]
+            }
+          }
+        },
+        {
+          "name": "Account Service Health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url_account}}/actuator/health",
+              "host": ["{{base_url_account}}"],
+              "path": ["actuator", "health"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "1. Auth Service",
+      "item": [
+        {
+          "name": "Register User",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.data && jsonData.data.userId) {",
+                  "    pm.collectionVariables.set('user_id', jsonData.data.userId);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"test@corebank.co.id\",\n  \"password\": \"Test1234!\",\n  \"phoneNumber\": \"+6281234567890\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url_auth}}/api/v1/auth/register",
+              "host": ["{{base_url_auth}}"],
+              "path": ["api", "v1", "auth", "register"]
+            }
+          }
+        },
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.data && jsonData.data.accessToken) {",
+                  "    pm.collectionVariables.set('access_token', jsonData.data.accessToken);",
+                  "    pm.collectionVariables.set('user_id', jsonData.data.userId);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"test@corebank.co.id\",\n  \"password\": \"Test1234!\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url_auth}}/api/v1/auth/login",
+              "host": ["{{base_url_auth}}"],
+              "path": ["api", "v1", "auth", "login"]
+            }
+          }
+        },
+        {
+          "name": "Refresh Token",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refresh_token}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url_auth}}/api/v1/auth/refresh",
+              "host": ["{{base_url_auth}}"],
+              "path": ["api", "v1", "auth", "refresh"]
+            }
+          }
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url_auth}}/api/v1/auth/logout",
+              "host": ["{{base_url_auth}}"],
+              "path": ["api", "v1", "auth", "logout"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Payment Service",
+      "item": [
+        {
+          "name": "Get Fee Schedule",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url_payment}}/api/v1/fees",
+              "host": ["{{base_url_payment}}"],
+              "path": ["api", "v1", "fees"]
+            }
+          }
+        },
+        {
+          "name": "Get Transaction Limits",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url_payment}}/api/v1/limits",
+              "host": ["{{base_url_payment}}"],
+              "path": ["api", "v1", "limits"]
+            }
+          }
+        },
+        {
+          "name": "Internal Transfer",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Idempotency-Key",
+                "value": "transfer-{{$timestamp}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"from_account_id\": \"{{account_id}}\",\n  \"to_account_number\": \"109876543210\",\n  \"amount\": 100000,\n  \"description\": \"Test internal transfer\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url_payment}}/api/v1/payments/transfer",
+              "host": ["{{base_url_payment}}"],
+              "path": ["api", "v1", "payments", "transfer"]
+            }
+          }
+        },
+        {
+          "name": "External Transfer",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Idempotency-Key",
+                "value": "external-{{$timestamp}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"from_account_id\": \"{{account_id}}\",\n  \"to_account_number\": \"1234567890\",\n  \"bank_code\": \"BCA\",\n  \"account_name\": \"John Doe\",\n  \"amount\": 50000,\n  \"description\": \"Test external transfer\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url_payment}}/api/v1/payments/transfer/external",
+              "host": ["{{base_url_payment}}"],
+              "path": ["api", "v1", "payments", "transfer", "external"]
+            }
+          }
+        },
+        {
+          "name": "Get Payment Status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url_payment}}/api/v1/payments/TRF20260307000001",
+              "host": ["{{base_url_payment}}"],
+              "path": ["api", "v1", "payments", "TRF20260307000001"]
+            }
+          }
+        },
+        {
+          "name": "Get Payment History",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url_payment}}/api/v1/payments?account_id={{account_id}}&limit=10&offset=0",
+              "host": ["{{base_url_payment}}"],
+              "path": ["api", "v1", "payments"],
+              "query": [
+                {
+                  "key": "account_id",
+                  "value": "{{account_id}}"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                },
+                {
+                  "key": "offset",
+                  "value": "0"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Account Service",
+      "item": [
+        {
+          "name": "Create Account",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.data && jsonData.data.accountId) {",
+                  "    pm.collectionVariables.set('account_id', jsonData.data.accountId);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": \"{{user_id}}\",\n  \"accountType\": \"SAVINGS\",\n  \"currency\": \"IDR\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url_account}}/api/v1/accounts",
+              "host": ["{{base_url_account}}"],
+              "path": ["api", "v1", "accounts"]
+            }
+          }
+        },
+        {
+          "name": "Get Account by ID",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url_account}}/api/v1/accounts/{{account_id}}",
+              "host": ["{{base_url_account}}"],
+              "path": ["api", "v1", "accounts", "{{account_id}}"]
+            }
+          }
+        },
+        {
+          "name": "List Accounts",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url_account}}/api/v1/accounts?userId={{user_id}}",
+              "host": ["{{base_url_account}}"],
+              "path": ["api", "v1", "accounts"],
+              "query": [
+                {
+                  "key": "userId",
+                  "value": "{{user_id}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Account Balance",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url_account}}/api/v1/accounts/{{account_id}}/balance",
+              "host": ["{{base_url_account}}"],
+              "path": ["api", "v1", "accounts", "{{account_id}}", "balance"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Transaction Service",
+      "item": [
+        {
+          "name": "List Transactions",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url_transaction}}/api/v1/transactions?account_id={{account_id}}&limit=20",
+              "host": ["{{base_url_transaction}}"],
+              "path": ["api", "v1", "transactions"],
+              "query": [
+                {
+                  "key": "account_id",
+                  "value": "{{account_id}}"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Transaction by ID",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url_transaction}}/api/v1/transactions/{{transaction_id}}",
+              "host": ["{{base_url_transaction}}"],
+              "path": ["api", "v1", "transactions", "{{transaction_id}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. Monitoring & Utilities",
+      "item": [
+        {
+          "name": "Prometheus Metrics",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:9090/metrics",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "9090",
+              "path": ["metrics"]
+            }
+          }
+        },
+        {
+          "name": "Grafana Dashboard",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:3000/api/health",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["api", "health"]
+            }
+          }
+        },
+        {
+          "name": "Elasticsearch Health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:9200/_cluster/health",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "9200",
+              "path": ["_cluster", "health"]
+            }
+          }
+        },
+        {
+          "name": "Kafka UI Clusters",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8090/api/clusters",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8090",
+              "path": ["api", "clusters"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

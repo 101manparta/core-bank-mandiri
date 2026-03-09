@@ -1,0 +1,361 @@
+// Core Bank Mandiri - Kafka Event Schemas
+// Protocol Buffers definitions for event-driven architecture
+
+syntax = "proto3";
+
+package corebank.events;
+
+option java_package = "com.corebank.events";
+option java_multiple_files = true;
+option go_package = "github.com/core-bank-mandiri/shared/events";
+
+import "google/protobuf/timestamp.proto";
+
+// ============================================================================
+// COMMON TYPES
+// ============================================================================
+
+message Money {
+    string amount = 1;           // Decimal string for precision
+    string currency = 2;         // ISO 4217 currency code
+}
+
+message AccountReference {
+    string account_id = 1;
+    string account_no = 2;
+    string holder_name = 3;
+}
+
+message UserReference {
+    string user_id = 1;
+    string email = 2;
+}
+
+message EventMetadata {
+    string event_id = 1;
+    string trace_id = 2;
+    string span_id = 3;
+    string correlation_id = 4;
+    google.protobuf.Timestamp occurred_at = 5;
+    string producer = 6;
+    string schema_version = 7;
+}
+
+// ============================================================================
+// TRANSACTION EVENTS
+// ============================================================================
+
+message TransactionCreated {
+    EventMetadata metadata = 1;
+    string transaction_id = 2;
+    string reference = 3;
+    string idempotency_key = 4;
+    string transaction_type = 5;      // TRANSFER, PAYMENT, DEPOSIT, WITHDRAWAL
+    Money amount = 6;
+    Money fee = 7;
+    Money total = 8;
+    AccountReference from_account = 9;
+    AccountReference to_account = 10;
+    string description = 11;
+    string status = 12;
+    google.protobuf.Timestamp created_at = 13;
+}
+
+message TransactionValidated {
+    EventMetadata metadata = 1;
+    string transaction_id = 2;
+    string reference = 3;
+    bool is_valid = 4;
+    repeated string validation_errors = 5;
+    int32 risk_score = 6;
+    google.protobuf.Timestamp validated_at = 7;
+}
+
+message TransactionCompleted {
+    EventMetadata metadata = 1;
+    string transaction_id = 2;
+    string reference = 3;
+    Money amount = 4;
+    AccountReference from_account = 5;
+    AccountReference to_account = 6;
+    google.protobuf.Timestamp completed_at = 7;
+    int32 ledger_entry_count = 8;
+}
+
+message TransactionFailed {
+    EventMetadata metadata = 1;
+    string transaction_id = 2;
+    string reference = 3;
+    string failure_code = 4;
+    string failure_reason = 5;
+    string failure_category = 6;      // INSUFFICIENT_FUNDS, VALIDATION, SYSTEM, FRAUD
+    google.protobuf.Timestamp failed_at = 7;
+    bool can_retry = 8;
+}
+
+message TransactionReversed {
+    EventMetadata metadata = 1;
+    string transaction_id = 2;
+    string original_reference = 3;
+    string reversal_reference = 4;
+    Money amount = 5;
+    string reversal_reason = 6;
+    google.protobuf.Timestamp reversed_at = 7;
+}
+
+// ============================================================================
+// ACCOUNT EVENTS
+// ============================================================================
+
+message AccountCreated {
+    EventMetadata metadata = 1;
+    string account_id = 2;
+    string account_no = 3;
+    string user_id = 4;
+    string account_type = 5;          // SAVINGS, CHECKING, BUSINESS
+    string currency = 6;
+    google.protobuf.Timestamp opened_at = 7;
+}
+
+message AccountDebited {
+    EventMetadata metadata = 1;
+    string account_id = 2;
+    string account_no = 3;
+    string transaction_id = 4;
+    string reference = 5;
+    Money amount = 6;
+    Money balance_before = 7;
+    Money balance_after = 8;
+    google.protobuf.Timestamp debited_at = 9;
+}
+
+message AccountCredited {
+    EventMetadata metadata = 1;
+    string account_id = 2;
+    string account_no = 3;
+    string transaction_id = 4;
+    string reference = 5;
+    Money amount = 6;
+    Money balance_before = 7;
+    Money balance_after = 8;
+    google.protobuf.Timestamp credited_at = 9;
+}
+
+message AccountBalanceUpdated {
+    EventMetadata metadata = 1;
+    string account_id = 2;
+    string account_no = 3;
+    Money old_balance = 4;
+    Money new_balance = 5;
+    Money old_available_balance = 6;
+    Money new_available_balance = 7;
+    string update_reason = 8;
+    google.protobuf.Timestamp updated_at = 9;
+}
+
+message AccountFrozen {
+    EventMetadata metadata = 1;
+    string account_id = 2;
+    string account_no = 3;
+    string reason = 4;
+    string frozen_by = 5;
+    google.protobuf.Timestamp frozen_at = 6;
+}
+
+message AccountUnfrozen {
+    EventMetadata metadata = 1;
+    string account_id = 2;
+    string account_no = 3;
+    string reason = 4;
+    string unfrozen_by = 5;
+    google.protobuf.Timestamp unfrozen_at = 6;
+}
+
+message AccountClosed {
+    EventMetadata metadata = 1;
+    string account_id = 2;
+    string account_no = 3;
+    string reason = 4;
+    Money final_balance = 5;
+    google.protobuf.Timestamp closed_at = 6;
+}
+
+// ============================================================================
+// FRAUD EVENTS
+// ============================================================================
+
+message FraudAlertTriggered {
+    EventMetadata metadata = 1;
+    string alert_id = 2;
+    string transaction_id = 3;
+    string user_id = 4;
+    int32 risk_score = 5;
+    string alert_type = 6;            // VELOCITY, AMOUNT, LOCATION, PATTERN
+    repeated string rules_triggered = 7;
+    string recommended_action = 8;    // BLOCK, REVIEW, ALLOW
+    google.protobuf.Timestamp triggered_at = 9;
+}
+
+message FraudAlertReviewed {
+    EventMetadata metadata = 1;
+    string alert_id = 2;
+    string transaction_id = 3;
+    string status = 4;                // CONFIRMED, FALSE_POSITIVE
+    string reviewed_by = 5;
+    string resolution_notes = 6;
+    google.protobuf.Timestamp reviewed_at = 7;
+}
+
+message FraudRiskScoreUpdated {
+    EventMetadata metadata = 1;
+    string user_id = 2;
+    int32 old_risk_score = 3;
+    int32 new_risk_score = 4;
+    repeated string contributing_factors = 5;
+    google.protobuf.Timestamp updated_at = 6;
+}
+
+// ============================================================================
+// NOTIFICATION EVENTS
+// ============================================================================
+
+message NotificationRequested {
+    EventMetadata metadata = 1;
+    string notification_id = 2;
+    string user_id = 3;
+    string notification_type = 4;   // EMAIL, SMS, PUSH, IN_APP
+    string event_category = 5;      // TRANSACTION, SECURITY, SYSTEM
+    string subject = 6;
+    string body = 7;
+    map<string, string> template_data = 8;
+    map<string, string> channel_data = 9;
+    int32 priority = 10;
+    google.protobuf.Timestamp requested_at = 11;
+}
+
+message NotificationSent {
+    EventMetadata metadata = 1;
+    string notification_id = 2;
+    string user_id = 3;
+    string notification_type = 4;
+    string channel_response = 5;
+    google.protobuf.Timestamp sent_at = 6;
+}
+
+message NotificationFailed {
+    EventMetadata metadata = 1;
+    string notification_id = 2;
+    string user_id = 3;
+    string notification_type = 4;
+    string failure_reason = 5;
+    int32 retry_count = 6;
+    google.protobuf.Timestamp failed_at = 7;
+}
+
+// ============================================================================
+// AUTH EVENTS
+// ============================================================================
+
+message UserLoggedIn {
+    EventMetadata metadata = 1;
+    string user_id = 2;
+    string email = 3;
+    string session_id = 4;
+    string device_id = 5;
+    string ip_address = 6;
+    string user_agent = 7;
+    bool mfa_verified = 8;
+    google.protobuf.Timestamp logged_in_at = 9;
+}
+
+message UserLoggedOut {
+    EventMetadata metadata = 1;
+    string user_id = 2;
+    string session_id = 3;
+    string reason = 4;
+    google.protobuf.Timestamp logged_out_at = 5;
+}
+
+message UserRegistered {
+    EventMetadata metadata = 1;
+    string user_id = 2;
+    string email = 3;
+    google.protobuf.Timestamp registered_at = 4;
+}
+
+message PasswordChanged {
+    EventMetadata metadata = 1;
+    string user_id = 2;
+    string email = 3;
+    bool is_reset = 4;
+    google.protobuf.Timestamp changed_at = 5;
+}
+
+message MfaEnabled {
+    EventMetadata metadata = 1;
+    string user_id = 2;
+    string mfa_type = 3;           // TOTP, SMS, EMAIL
+    google.protobuf.Timestamp enabled_at = 4;
+}
+
+// ============================================================================
+// AUDIT EVENTS
+// ============================================================================
+
+message AuditEvent {
+    EventMetadata metadata = 1;
+    string audit_id = 2;
+    string trace_id = 3;
+    string user_id = 4;
+    string action = 5;              // CREATE, READ, UPDATE, DELETE
+    string resource_type = 6;       // ACCOUNT, TRANSACTION, USER
+    string resource_id = 7;
+    map<string, string> old_values = 8;
+    map<string, string> new_values = 9;
+    string ip_address = 10;
+    string service_name = 11;
+    string status = 12;             // SUCCESS, FAILURE
+    string error_message = 13;
+    google.protobuf.Timestamp occurred_at = 14;
+}
+
+// ============================================================================
+// SYSTEM EVENTS
+// ============================================================================
+
+message SystemHealthCheck {
+    EventMetadata metadata = 1;
+    string service_name = 2;
+    string instance_id = 3;
+    string status = 4;              // HEALTHY, DEGRADED, UNHEALTHY
+    map<string, double> metrics = 5;
+    google.protobuf.Timestamp checked_at = 6;
+}
+
+message ScheduledTransactionExecuted {
+    EventMetadata metadata = 1;
+    string scheduled_transaction_id = 2;
+    string transaction_id = 3;
+    string user_id = 4;
+    Money amount = 5;
+    int32 execution_count = 6;
+    google.protobuf.Timestamp executed_at = 7;
+}
+
+message BatchProcessingStarted {
+    EventMetadata metadata = 1;
+    string batch_id = 2;
+    string batch_type = 3;          // INTEREST_CALCULATION, FEE_ASSESSMENT, RECONCILIATION
+    int32 item_count = 4;
+    google.protobuf.Timestamp started_at = 5;
+}
+
+message BatchProcessingCompleted {
+    EventMetadata metadata = 1;
+    string batch_id = 2;
+    string batch_type = 3;
+    int32 items_processed = 4;
+    int32 items_failed = 5;
+    google.protobuf.Timestamp completed_at = 6;
+    string status = 7;
+}

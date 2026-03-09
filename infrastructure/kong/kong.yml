@@ -1,0 +1,593 @@
+# Core Bank Mandiri - Kong Gateway Configuration
+# Production-grade API Gateway with rate limiting, authentication, and routing
+
+# ============================================================================
+# KONG CONFIGURATION (kong.yml)
+# ============================================================================
+
+_format_version: "3.0"
+_transform: true
+
+services:
+  # Auth Service
+  - name: auth-service
+    url: http://auth-service:8080
+    connect_timeout: 5000
+    write_timeout: 5000
+    read_timeout: 5000
+    retries: 3
+    tags:
+      - internal
+      - auth
+    routes:
+      - name: auth-login
+        paths:
+          - /api/v1/auth/login
+        methods:
+          - POST
+        strip_path: false
+        preserve_host: true
+      - name: auth-logout
+        paths:
+          - /api/v1/auth/logout
+        methods:
+          - POST
+        strip_path: false
+        preserve_host: true
+      - name: auth-refresh
+        paths:
+          - /api/v1/auth/refresh
+        methods:
+          - POST
+        strip_path: false
+        preserve_host: true
+      - name: auth-register
+        paths:
+          - /api/v1/auth/register
+        methods:
+          - POST
+        strip_path: false
+        preserve_host: true
+      - name: auth-forgot-password
+        paths:
+          - /api/v1/auth/forgot-password
+        methods:
+          - POST
+        strip_path: false
+        preserve_host: true
+      - name: auth-mfa
+        paths:
+          - /api/v1/auth/mfa
+        methods:
+          - POST
+        strip_path: false
+        preserve_host: true
+    plugins:
+      - name: rate-limiting
+        config:
+          minute: 30
+          hour: 100
+          policy: redis
+          redis_host: redis
+          redis_port: 6379
+          hide_client_headers: false
+      - name: ip-restriction
+        config:
+          allow:
+            - 0.0.0.0/0
+      - name: request-transformer
+        config:
+          add:
+            headers:
+              - X-Service-Name:auth-service
+      - name: prometheus
+        config:
+          per_consumer: true
+          status_code_metrics: true
+          latency_metrics: true
+          bandwidth_metrics: true
+          upstream_health_metrics: true
+
+  # Account Service
+  - name: account-service
+    url: http://account-service:8080
+    connect_timeout: 5000
+    write_timeout: 5000
+    read_timeout: 10000
+    retries: 3
+    tags:
+      - internal
+      - accounts
+    routes:
+      - name: accounts-crud
+        paths:
+          - /api/v1/accounts
+        methods:
+          - GET
+          - POST
+          - PUT
+          - DELETE
+        strip_path: false
+        preserve_host: true
+    plugins:
+      - name: rate-limiting
+        config:
+          minute: 100
+          hour: 1000
+          policy: redis
+          redis_host: redis
+          redis_port: 6379
+      - name: jwt
+        config:
+          key_claim_name: user_id
+          secret_is_base64: false
+          claims_to_verify:
+            - exp
+      - name: acl
+        config:
+          hide_groups_header: true
+          allow:
+            - user
+            - admin
+            - service
+      - name: request-transformer
+        config:
+          add:
+            headers:
+              - X-Service-Name:account-service
+      - name: response-transformer
+        config:
+          add:
+            headers:
+              - X-Request-ID:$(request_id)
+      - name: prometheus
+
+  # Payment Service
+  - name: payment-service
+    url: http://payment-service:8080
+    connect_timeout: 5000
+    write_timeout: 5000
+    read_timeout: 30000
+    retries: 2
+    tags:
+      - internal
+      - payments
+    routes:
+      - name: payments-transfer
+        paths:
+          - /api/v1/payments/transfer
+          - /api/v1/payments/internal
+          - /api/v1/payments/external
+        methods:
+          - POST
+        strip_path: false
+        preserve_host: true
+      - name: payments-status
+        paths:
+          - /api/v1/payments
+        methods:
+          - GET
+        strip_path: false
+        preserve_host: true
+    plugins:
+      - name: rate-limiting
+        config:
+          minute: 60
+          hour: 500
+          policy: redis
+          redis_host: redis
+          redis_port: 6379
+      - name: jwt
+        config:
+          key_claim_name: user_id
+          secret_is_base64: false
+          claims_to_verify:
+            - exp
+      - name: acl
+        config:
+          hide_groups_header: true
+          allow:
+            - user
+            - admin
+      - name: request-transformer
+        config:
+          add:
+            headers:
+              - X-Service-Name:payment-service
+              - X-Idempotency-Required:true
+      - name: prometheus
+      - name: file-log
+        config:
+          path: /var/log/kong/payment-service.log
+          reopen: true
+
+  # Transaction Service
+  - name: transaction-service
+    url: http://transaction-service:8080
+    connect_timeout: 5000
+    write_timeout: 5000
+    read_timeout: 15000
+    retries: 3
+    tags:
+      - internal
+      - transactions
+    routes:
+      - name: transactions-list
+        paths:
+          - /api/v1/transactions
+        methods:
+          - GET
+        strip_path: false
+        preserve_host: true
+      - name: transactions-detail
+        paths:
+          - /api/v1/transactions/
+        methods:
+          - GET
+        strip_path: false
+        preserve_host: true
+    plugins:
+      - name: rate-limiting
+        config:
+          minute: 200
+          hour: 2000
+          policy: redis
+          redis_host: redis
+          redis_port: 6379
+      - name: jwt
+        config:
+          key_claim_name: user_id
+          secret_is_base64: false
+          claims_to_verify:
+            - exp
+      - name: acl
+        config:
+          hide_groups_header: true
+          allow:
+            - user
+            - admin
+            - auditor
+      - name: request-transformer
+        config:
+          add:
+            headers:
+              - X-Service-Name:transaction-service
+      - name: prometheus
+      - name: cors
+        config:
+          origins:
+            - https://banking.core-mandiri.co.id
+          methods:
+            - GET
+            - POST
+            - OPTIONS
+          headers:
+            - Accept
+            - Content-Type
+            - Authorization
+          exposed_headers:
+            - X-Request-ID
+          credentials: true
+          max_age: 3600
+
+  # Audit Service
+  - name: audit-service
+    url: http://audit-service:8080
+    connect_timeout: 5000
+    write_timeout: 5000
+    read_timeout: 10000
+    retries: 3
+    tags:
+      - internal
+      - audit
+    routes:
+      - name: audit-logs
+        paths:
+          - /api/v1/audit/logs
+        methods:
+          - GET
+        strip_path: false
+        preserve_host: true
+      - name: audit-reports
+        paths:
+          - /api/v1/audit/reports
+        methods:
+          - GET
+          - POST
+        strip_path: false
+        preserve_host: true
+    plugins:
+      - name: rate-limiting
+        config:
+          minute: 50
+          hour: 500
+          policy: redis
+          redis_host: redis
+          redis_port: 6379
+      - name: jwt
+        config:
+          key_claim_name: user_id
+          secret_is_base64: false
+          claims_to_verify:
+            - exp
+      - name: acl
+        config:
+          hide_groups_header: true
+          allow:
+            - admin
+            - auditor
+            - compliance
+      - name: request-transformer
+        config:
+          add:
+            headers:
+              - X-Service-Name:audit-service
+      - name: prometheus
+
+# Global Plugins
+plugins:
+  # Health Check Plugin
+  - name: prometheus
+    config:
+      per_consumer: true
+      status_code_metrics: true
+      latency_metrics: true
+      bandwidth_metrics: true
+      upstream_health_metrics: true
+      keepalive_counter: true
+
+  # Request ID for tracing
+  - name: request-id
+    config:
+      header_name: X-Request-ID
+      generator: uuid
+
+  # Response Transformer for standard format
+  - name: response-transformer
+    config:
+      add:
+        headers:
+          - X-Powered-By:Core-Bank-Mandiri
+          - X-API-Version:v1
+
+  # Bot Detection
+  - name: bot-detection
+    config:
+      allow:
+        - "Googlebot"
+        - "Bingbot"
+      deny:
+        - "curl"
+        - "wget"
+
+  # CORS (Global)
+  - name: cors
+    config:
+      origins:
+        - https://banking.core-mandiri.co.id
+        - https://mobile.core-mandiri.co.id
+      methods:
+        - GET
+        - POST
+        - PUT
+        - DELETE
+        - OPTIONS
+      headers:
+        - Accept
+        - Content-Type
+        - Authorization
+        - X-Request-ID
+        - X-Idempotency-Key
+      exposed_headers:
+        - X-Request-ID
+        - X-Correlation-ID
+      credentials: true
+      max_age: 3600
+
+  # Zipkin/Jaeger Tracing
+  - name: zipkin
+    config:
+      http_endpoint: http://jaeger:9411/api/v2/spans
+      sample_ratio: 0.1
+      include_credential: true
+      header_type: preserve
+      default_header_type: preserve
+
+# Consumers (for API Key authentication)
+consumers:
+  - username: mobile-app
+    custom_id: mobile-app-001
+    keyauth_credentials:
+      - key: mobile-app-key-xxxxx
+    acl_groups:
+      - user
+
+  - username: web-app
+    custom_id: web-app-001
+    keyauth_credentials:
+      - key: web-app-key-xxxxx
+    acl_groups:
+      - user
+
+  - username: partner-api
+    custom_id: partner-api-001
+    keyauth_credentials:
+      - key: partner-api-key-xxxxx
+    acl_groups:
+      - partner
+
+  - username: internal-service
+    custom_id: internal-service-001
+    keyauth_credentials:
+      - key: internal-service-key-xxxxx
+    acl_groups:
+      - service
+
+# Consumer Groups for Rate Limiting
+consumer_groups:
+  - name: premium-users
+    consumers:
+      - username: premium-user-001
+    plugins:
+      - name: rate-limiting
+        config:
+          minute: 500
+          hour: 5000
+
+  - name: standard-users
+    consumers:
+      - username: standard-user-001
+    plugins:
+      - name: rate-limiting
+        config:
+          minute: 100
+          hour: 1000
+
+# Upstreams for Load Balancing
+upstreams:
+  - name: auth-service-upstream
+    algorithm: round-robin
+    slots: 10000
+    healthchecks:
+      active:
+        healthy:
+          interval: 5
+          successes: 2
+        unhealthy:
+          interval: 5
+          http_failures: 3
+        http_path: /actuator/health
+        timeout: 5
+        concurrency: 10
+      passive:
+        healthy:
+          successes: 5
+        unhealthy:
+          http_failures: 3
+          tcp_failures: 3
+          timeouts: 3
+    targets:
+      - target: auth-service-1.auth-service:8080
+        weight: 100
+      - target: auth-service-2.auth-service:8080
+        weight: 100
+
+  - name: account-service-upstream
+    algorithm: least-connections
+    slots: 10000
+    healthchecks:
+      active:
+        healthy:
+          interval: 5
+          successes: 2
+        unhealthy:
+          interval: 5
+          http_failures: 3
+        http_path: /actuator/health
+        timeout: 5
+      passive:
+        healthy:
+          successes: 5
+        unhealthy:
+          http_failures: 3
+    targets:
+      - target: account-service-1.account-service:8080
+        weight: 100
+      - target: account-service-2.account-service:8080
+        weight: 100
+      - target: account-service-3.account-service:8080
+        weight: 100
+
+  - name: payment-service-upstream
+    algorithm: round-robin
+    slots: 10000
+    healthchecks:
+      active:
+        healthy:
+          interval: 5
+          successes: 2
+        unhealthy:
+          interval: 5
+          http_failures: 2
+        http_path: /health
+        timeout: 5
+    targets:
+      - target: payment-service-1.payment-service:8080
+        weight: 100
+      - target: payment-service-2.payment-service:8080
+        weight: 100
+
+# CA Certificates for mTLS
+ca_certificates:
+  - cert: |
+      -----BEGIN CERTIFICATE-----
+      MIIDXTCCAkWgAwIBAgIJAJC1HiIAZAiUMA0Gcg...
+      -----END CERTIFICATE-----
+    tags:
+      - internal-mtls
+
+# Certificates for HTTPS
+certificates:
+  - cert: |
+      -----BEGIN CERTIFICATE-----
+      MIIDXTCCAkWgAwIBAgIJAJC1HiIAZAiUMA0Gcg...
+      -----END CERTIFICATE-----
+    key: |
+      -----BEGIN PRIVATE KEY-----
+      MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSk...
+      -----END PRIVATE KEY-----
+    snis:
+      - banking.core-mandiri.co.id
+
+# ============================================================================
+# NGINX TEMPLATE CUSTOMIZATION
+# ============================================================================
+
+# Custom nginx configuration for additional tuning
+nginx_http:
+  client_max_body_size: 10m
+  client_body_buffer_size: 128k
+  client_header_buffer_size: 1k
+  large_client_header_buffers: 4 8k
+  
+  # Rate limiting zones
+  limit_req_zone $binary_remote_addr zone=api_limit:10m rate=100r/s;
+  limit_req_zone $http_x_api_key zone=apikey_limit:10m rate=1000r/s;
+  
+  # Connection limits
+  limit_conn_zone $binary_remote_addr zone=conn_limit:10m;
+  
+  # Security headers
+  add_header X-Frame-Options "SAMEORIGIN" always;
+  add_header X-Content-Type-Options "nosniff" always;
+  add_header X-XSS-Protection "1; mode=block" always;
+  add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+  add_header Content-Security-Policy "default-src 'self'" always;
+
+nginx_stream:
+  # TCP connection settings
+  proxy_connect_timeout: 5s
+  proxy_timeout: 30s
+
+# ============================================================================
+# ENVIRONMENT VARIABLES
+# ============================================================================
+
+# KONG_DATABASE: postgres
+# KONG_PG_HOST: postgres
+# KONG_PG_PORT: 5432
+# KONG_PG_DATABASE: kong
+# KONG_PG_USER: kong
+# KONG_PG_PASSWORD: kong_password
+# KONG_PROXY_ACCESS_LOG: /dev/stdout
+# KONG_ADMIN_ACCESS_LOG: /dev/stdout
+# KONG_PROXY_ERROR_LOG: /dev/stderr
+# KONG_ADMIN_ERROR_LOG: /dev/stderr
+# KONG_ADMIN_LISTEN: 0.0.0.0:8001
+# KONG_PROXY_LISTEN: 0.0.0.0:8000, 0.0.0.0:8443 ssl
+# KONG_LOG_LEVEL: info
+# KONG_LUA_SSL_TRUSTED_CERTIFICATE: system
+# KONG_TRACING: on
+# KONG_TRACING_WRITING_STRATEGY: file
+# KONG_TRACING_TYPES: started, stopped, active
+# KONG_TRACING_DEBUG: true

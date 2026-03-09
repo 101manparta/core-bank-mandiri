@@ -455,9 +455,6 @@ This project is proprietary software. All rights reserved.
 
 ## 📞 Support
 
-- **Security Issues**: security@corebank.co.id
-- **Technical Support**: support@corebank.co.id
-- **Documentation**: https://docs.corebank.co.id
 
 ---
 
